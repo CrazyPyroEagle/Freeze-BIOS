@@ -1,0 +1,8 @@
+print("Unfinished: /bios/runos")
+
+term.setBackgroundColor(colors.black)
+term.setTextColor(colors.white)
+term.clear()
+term.setCursorPos(1, 1)
+
+local ok, err = pcall(parallel.waitForAll, function() sandbox.os.run(sandbox, "/rom/programs/shell") mount.endAutomount() end, mount.automount)

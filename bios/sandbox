@@ -1,0 +1,383 @@
+local function parseFullConfig(path)
+  if not fs.exists(path) then
+    return nil
+  end
+  result = {}
+  h = fs.open(path, "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+getEnv().sandbox = {}
+getEnv().mount = {}
+
+local args = {...}
+local newroot = "/os/"..(args[1] or parseFullConfig(config).boot).."/fs"
+
+local function register(key, source, dest, sandbox)
+  if type(source[key]) == "table" then
+    if dest[key] == nil then
+      dest[key] = {}
+    end
+    print("Sandboxing "..tostring(key))
+    for k, v in pairs(source[key]) do
+      if v ~= source[key] then
+        register(k, source[key], dest[key])
+      else
+        dest[key][k] = dest[key]
+      end
+    end
+  elseif type(source[key]) == "function" and dest[key] == nil then
+    oldenv = _ENV
+    dest[key] = function(...)
+      _ENV = sandbox
+      return source[key](...)
+    end
+  elseif dest[key] == nil then
+    dest[key] = source[key]
+  end
+end
+
+-- Setup mount system
+local doMount = true
+mount.automount = function()
+  for _, name in pairs(peripheral.getNames()) do    -- Mount drives already connected
+    if peripheral.getType(name) == "drive" and peripheral.call(name, "hasData") then
+      mount.mount(name)
+    end
+  end
+  
+  doMount = true
+  while doMount do
+    event, name = os.pullEventRaw()
+    if doMount then
+      if event == "disk" then
+        mount.mount(name)
+      elseif event == "disk_eject" then
+        mount.unmount(name)
+      end
+    end
+  end
+end
+
+mount.endAutomount = function()
+  doMount = false
+  os.queueEvent("I am an event.")
+end
+
+local mounted = {}
+local mountedHandles = {}
+mount.mount = function(side)
+  if mounted[side] == nil then
+    mounted[side] = fs.combine("/", peripheral.call(side, "getMountPath"))
+    -- Mount here
+  end
+end
+
+mount.unmount = function(side)
+  if mounted[side] ~= nil then
+    if mountedHandles[side] ~= nil then
+      for _, handle in pairs(mountedHandles[side]) do
+        if type(handle) == "table" and type(handle.close) == "function" then    -- Security checks to avoid setfenv and _ENV abuse in sandbox environment
+          handle.close()
+        end
+      end
+    end
+    mounted[side] = nil
+  end
+end
+
+mount.isMounted = function(path)
+  for name, mnt in pairs(mounted) do
+    if path:match("^/?"..mnt) ~= nil then    -- Does not handle unsafe path names... yet!
+      return name
+    end
+  end
+  return nil
+end
+
+mount.getMountedPaths = function()
+  local paths = {}
+  local index = 1
+  for name, path in pairs(mounted) do
+    paths[index] = path:match("^/?([^/]+)")
+    index = index + 1
+  end
+  return paths
+end
+
+-- Setup sandboxed FS
+local function relativePath(path)
+  if path == nil then
+    return nil
+  end
+  local path, matches = fs.combine("/", path):gsub("%.%./?", "")
+  local isRoot = path:match("^/?$") ~= nil
+  local name = mount.isMounted(path)
+  if name ~= nil then
+    return path, matches == 0, isRoot, name
+  else
+    return fs.combine(newroot, path), matches == 0, isRoot, nil
+  end
+end
+
+sandbox.fs = {}
+
+sandbox.fs.list = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe, isRoot = relativePath(path)
+  if safe then
+    local list = fs.list(newpath)
+    if isRoot then
+      local mountedPaths = mount.getMountedPaths()
+      for _, value in pairs(mountedPaths) do
+        list[#list + 1] = value
+      end
+    end
+    return list
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.exists = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.exists(newpath)
+  else
+    return false
+  end
+end
+
+sandbox.fs.isDir = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.isDir(newpath)
+  else
+    return false
+  end
+end
+
+sandbox.fs.isReadOnly = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return newpath:sub(#newroot, -1):match("^/?rom.*") ~= nil
+  else
+    return false
+  end
+end
+
+sandbox.fs.getSize = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.getSize(newpath)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.getFreeSpace = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.getFreeSpace(newpath)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.makeDir = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    fs.makeDir(newpath)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.move = function(pathSrc, pathDst)
+  if type(pathSrc) ~= "string" or type(pathDst) ~= "string" then
+    error("Expected string, string", 2)
+  end
+  
+  local newpathSrc, safeSrc = relativePath(pathSrc)
+  local newpathDst, safeDst = relativePath(pathDst)
+  if safeSrc and safeDst then
+    fs.move(newpathSrc, newpathDst)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.copy = function(pathSrc, pathDst)
+  if type(pathSrc) ~= "string" or type(pathDst) ~= "string" then
+    error("Expected string, string", 2)
+  end
+  
+  local newpathSrc, safeSrc = relativePath(pathSrc)
+  local newpathDst, safeDst = relativePath(pathDst)
+  if safeSrc and safeDst then
+    fs.copy(newpathSrc, newpathDst)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.delete = function(path)
+  if type(path) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe, _, isMounted = relativePath(path)
+  local _, _, isParentRoot = relativePath(fs.getDir(path))
+  if isMounted and isParentRoot then
+    error("Access denied", 2)
+  elseif safe then
+    fs.delete(newpath)
+  else
+    error("Invalid Path", 2)
+  end
+end
+
+sandbox.fs.open = function(path, mode)
+  if type(path) ~= "string" or type(mode) ~= "string" then
+    error("Expected string, string", 2)
+  end
+  
+  local newpath, safe, _, mounted = relativePath(path)
+  if safe then
+    local handle = fs.open(newpath, mode)
+    if mounted ~= nil then    -- Register the handle for when the path gets unmounted
+      mountedHandles[mounted] = mountedHandles[mounted] or {}
+      mountedHandles[mounted][#mountedHandles[mounted] + 1] = handle
+    end
+    return handle
+  else
+    return nil
+  end
+end
+
+sandbox.fs.find = function(wildcard)    -- Might need to add mounted paths (probably doesn't support them)
+  if type(wildcard) ~= "string" then
+    error("Expected string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.find(newpath)
+  else
+    return {}
+  end
+end
+
+sandbox.fs.complete = function(file, parent, ...)   -- Same as fs.find
+  if type(file) ~= "string" or type(parent) ~= "string" then
+    error("Expected string, string", 2)
+  end
+  
+  local newpath, safe = relativePath(path)
+  if safe then
+    return fs.complete(file, newpath, ...)
+  else
+    return {}
+  end
+end
+
+sandbox.getfenv = function(index)   -- No more using getfenv to escape the sandbox :D
+  if getfenv(index) ~= sandbox then   -- For some reason always evaluates to true (returns sandbox every time)
+    return sandbox
+  else
+    return getfenv(index)
+  end
+end
+
+sandbox._G = sandbox
+register("_G", _G, sandbox, sandbox)
+sandbox.shell = nil
+sandbox.multishell = nil
+
+sandbox.os.run = function(env, path, ...)
+  for k, v in pairs(sandbox) do
+    if env[k] == nil then
+      env[k] = v
+    end
+  end
+  env._G = sandbox
+  return os.run(env, relativePath(path), ...)
+end
+
+sandbox.os.reboot = function()
+  os.reboot()
+end
+
+local apisLoading = {}
+sandbox.os.loadAPI = function(path)
+  local name = fs.getName(path)
+  if apisLoading[name] == true then
+      printError("API "..name.." is already being loaded")
+      return false
+  end
+  apisLoading[name] = true
+
+  local env = {}
+  setmetatable(env, {__index = sandbox})
+  local apiFn, err = loadfile(relativePath(path), env)
+  if apiFn then
+      local ok, err = pcall(apiFn)
+      if not ok then
+          printError(err)
+          apisLoading[sName] = nil
+          return false
+      end
+  else
+      printError(err)
+      apisLoading[sName] = nil
+      return false
+  end
+  
+  local api = {}
+  for k,v in pairs(env) do
+      if k ~= "_ENV" and k ~= "_G" then
+          api[k] =  v
+      end
+  end
+
+  sandbox[name] = api
+  apisLoading[name] = nil
+  return true
+end
+
+sandbox.io = nil
+sandbox.os.loadAPI("/rom/apis/io")

@@ -1,0 +1,110 @@
+local bios = {
+  name = "Freeze BIOS",
+  version = "Alpha"
+}
+
+local terminal = {}
+terminal.width, terminal.height = term.getSize()
+
+local config = "/bios/config"
+
+local pullEvent = os.pullEvent
+os.pullEvent = os.pullEventRaw
+
+local environment = {
+  bios = bios,
+  terminal = terminal,
+  config = config,
+  pullEvent = pullEvent
+}
+environment.getEnv = function() return environment end
+
+local title = bios.name .. " " .. bios.version
+
+term.setBackgroundColor(colors.white)
+term.setTextColor(colors.cyan)
+term.clear()
+term.setCursorPos(terminal.width / 2 - #title / 2, terminal.height / 2)
+write(title)
+
+if fs.exists(config) and not fs.isDir(config) then
+  local notification = "[*] Setup"
+  term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+  write(notification)
+  local timer = os.startTimer(2)
+  while true do
+    event, opt = os.pullEventRaw()
+    if event == "key" then
+      os.cancelTimer(timer)
+      os.run(environment, "/bios/setup")
+      break
+    elseif event == "timer" and opt == timer then
+      break
+    end
+  end
+else
+  sleep(2)
+  local notification = "[*] Continue"
+  term.clear()
+  local parent = term.current()
+  term.redirect(window.create(term.current(), 2, 2, terminal.width - 2, terminal.height - 2))
+  term.setBackgroundColor(colors.white)
+  term.setTextColor(colors.cyan)
+  term.clear()
+  local welcome = "Welcome to "..bios.name
+  term.setCursorPos(terminal.width / 2 - #welcome / 2, 1)
+  print(welcome)
+  print("\n[K] represents the K key")
+  print("[*] represents any key")
+  print("\nThese keys perform actions")
+  print("\nYou will next be prompted for a password to secure the BIOS")
+  term.redirect(parent)
+  term.setCursorPos(terminal.width - #notification, terminal.height)
+  write(notification)
+  os.pullEventRaw("key")
+  
+  term.clear()
+  term.setCursorPos(5, 2)
+  write("Password")
+  term.setCursorPos(5, 4)
+  write("Reenter")
+  term.setCursorPos(2, 3)
+  local pw = read("*")
+  term.setCursorPos(2, 5)
+  local pw2 = read("*")
+  while #pw < 6 or pw ~= pw2 do
+    term.setCursorPos(2, 7)
+    term.clearLine()
+    if #pw < 6 then
+      write("Password must be at least 6 characters!")
+    else
+      write("Passwords must match!")
+    end
+    term.setCursorPos(2, 5)
+    term.clearLine()
+    term.setCursorPos(2, 3)
+    term.clearLine()
+    pw = read("*")
+    term.setCursorPos(2, 5)
+    pw2 = read("*")
+  end
+  
+  os.run(environment, "/bios/initself", pw)
+  term.clear()
+  message = os.version().." has been installed"
+  term.setCursorPos(terminal.width / 2 - #message / 2 + 1, terminal.height / 2)
+  write(message)
+  message = "[S] Setup"
+  term.setCursorPos(terminal.width - #message + 1, terminal.height - 1)
+  write(message)
+  message = "[*] "..os.version()
+  term.setCursorPos(terminal.width - #message + 1, terminal.height)
+  write(message)
+  _, key = os.pullEventRaw("key")
+  if (key == 31) then -- S key pressed
+    os.run(environment, "/bios/setup")
+  end
+end
+
+os.run(environment, "/bios/sandbox")
+os.run(environment, "/bios/runos")

@@ -1,0 +1,75 @@
+local osid = 0
+while fs.isDir("/os/"..tostring(osid)) do
+  osid = osid + 1
+end
+osid = tostring(osid)
+
+local function pastebinInstall()
+  fs.makeDir("/os/"..osid.."/fs")
+  return true
+end
+
+local function diskInstall()
+  local menu = {}
+  
+  local path = "default"
+  local driveName = ""
+  index = 1
+  for _, name in pairs(peripheral.getNames()) do
+    if peripheral.getType(name) == "drive" and disk.hasData(name) and fs.exists(fs.combine(disk.getMountPath(name), "startup")) then    -- Gentlemen, we have ourselves a floppy disk filesystem!
+      menu[index] = {
+        text = (name:sub(1, 1):upper()..name:sub(2, -1):lower().." ["..disk.getMountPath(name).."]"):gsub("_", " "),
+        selectable = true,
+        selected = function() path = disk.getMountPath(name); driveName = name return true end,
+        keyPressed = function() end
+      }
+      index = index + 1
+    end
+  end
+  
+  doMenu(menu)
+  
+  fs.makeDir("/os/"..osid.."/fs")
+  fs.copy("/rom", "/os/"..osid.."/fs/rom")
+  os.run(getEnv(), "/bios/sandbox", tostring(osid))
+  mount.mount(driveName)
+  
+  term.clear()
+  term.setCursorPos(5, 2)
+  print("OS Name?")
+  term.setCursorPos(2, 3)
+  local osName = read()
+  local handle = fs.open("/os/"..osid.."/config", "w")
+  handle.writeLine("name = \""..osName.."\"")
+  handle.close()
+  
+  term.clear()
+  term.setCursorPos(1, 1)
+  os.run(sandbox, fs.combine(path, "startup"))
+  mount.unmount(driveName)
+  return true
+end
+
+local menu = {
+  {
+    text = "Install from Pastebin",
+    selectable = true,
+    selected = pastebinInstall,
+    keyPressed = function() end
+  }, {
+    text = "Install from disk",
+    selectable = true,
+    selected = function() local ok, err = pcall(diskInstall); if not ok then print(err); os.pullEventRaw("key") end end,
+    keyPressed = function() end
+  }, {
+    text = "",
+    selectable = false
+  }, {
+    text = "Cancel",
+    selectable = true,
+    selected = function() return true end,
+    keyPressed = function() end
+  }
+}
+
+doMenu(menu)

@@ -1,0 +1,37 @@
+local previous = term.current()
+term.redirect(window.create(term.current(), 2, 2, terminal.width - 2, terminal.height - 2, true))
+term.setBackgroundColor(colors.white)
+term.setTextColor(colors.cyan)
+term.clear()
+local message = "Installing "..os.version()
+term.setCursorPos(terminal.width / 2 - #message / 2 - 1 + #message % 2, 2)
+print(message)
+
+print("\nCreating directory")
+fs.makeDir("/os/0/fs")
+fs.makeDir("/os/default")
+
+print("Generating default settings")
+local defaults = settings.getNames()
+defaults["shell.allow_disk_startup"] = false
+settings.save("/os/default/default_settings")
+
+print("Generating default configuration")
+local handle = fs.open("/os/default/config", "w")
+handle.writeLine("run = \"/rom/programs/shell\"")
+handle.close()
+handle = fs.open("/os/0/config", "w")
+handle.writeLine("name = \""..os.version().."\"")
+handle.close()
+
+print("Copying files")
+fs.copy("/rom", "/os/0/fs/rom")
+
+term.redirect(previous)
+
+local args = {...}
+handle = fs.open(config, "w")
+handle.writeLine("boot = \"0\"")
+handle.writeLine("secureMode = \"true\"")
+handle.writeLine("password = \""..args[1].."\"")
+handle.close()

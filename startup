@@ -1,0 +1,2 @@
+shell.exit()    -- Goodbye, Che- I mean Shell
+os.run({}, "/bios/start")

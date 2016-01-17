@@ -1,0 +1,314 @@
+local function drawMenu(options, selected, index)
+  term.clear()
+  while index ~= terminal.height - 2 and index <= #options do
+    if index == selected then
+      term.setTextColor(colors.red)
+    else
+      term.setTextColor(colors.cyan)
+    end
+    term.setCursorPos(2, index + 1)
+    term.clearLine()
+    write(options[index].text)
+    index = index + 1
+  end
+  term.setTextColor(colors.cyan)
+  
+  message = "[Enter] Confirm"
+  term.setCursorPos(terminal.width - #message + 1, terminal.height)
+  write(message)
+end
+
+local function doMenu(options)
+  local index = 1
+  local selected = 1
+  while true do
+    drawMenu(options, selected, index)
+    local _, key = os.pullEventRaw("key")
+    if key == 200 then    -- Up arrow
+      local newindex = selected - 1
+      while newindex > 0 and not options[newindex].selectable do
+        newindex = newindex - 1
+      end
+      if newindex > 0 then
+        selected = newindex
+      end
+    elseif key == 208 then    -- Down arrow
+      local newindex = selected + 1
+      while newindex <= #options and not options[newindex].selectable do
+        newindex = newindex + 1
+      end
+      if newindex <= #options then
+        selected = newindex
+      end
+    elseif key == 28 then    -- Enter
+      if options[selected].selected() then
+        return
+      end
+    else
+      options[selected].keyPressed(key)
+    end
+    
+    if #options > terminal.height - 2 then
+      if index - selected > terminal.height - 2 then    -- Index is too high
+        index = math.max(1, selected)
+      elseif index - selected < 0 then    -- Index is too low
+        index = math.min(#options - terminal.height + 2, selected)
+      end
+    end
+  end
+end
+
+local function parseConfig(id)
+  if type(id) ~= "string" then
+    id = tostring(id)
+  end
+  if not fs.exists("/os/"..id) then
+    return nil
+  end
+  result = {}
+  h = fs.open("/os/default/config", "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("(%w+) = \"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  h = fs.open("/os/"..id.."/config", "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+local function parseFullConfig(path)
+  if not fs.exists(path) then
+    return nil
+  end
+  result = {}
+  h = fs.open(path, "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+local function writeFullConfig(path, config)
+  h = fs.open(path, "w")
+  for key, value in pairs(config) do
+    h.writeLine(key.." = ".."\""..value.."\"")
+  end
+  h.close()
+end
+
+local biosConfig = parseFullConfig(config)
+local secureSettings = biosConfig.secureMode == "true"
+local password = biosConfig.password
+
+local function configureOS(id)
+  if type(id) ~= "string" then
+    id = tostring(id)
+  end
+  if not fs.exists("/os/"..id) then
+    return
+  end
+  
+  term.clear()
+  term.setCursorPos(5, 2)
+  write("Password")
+  term.setCursorPos(2, 3)
+  pw = read("*")
+  
+  if pw == password then
+    settings.load("/os/"..id.."/default_settings")
+    menu = {}
+    
+    menu[1] = {
+      key = "bios.use_multishell",
+      value = settings.get("bios.use_multishell") or false,
+      selectable = true,
+      selected = function() menu[1].value = not menu[1].value menu[1].text = "Multishell: "..(menu[1].value and "enabled" or "disabled") return false end,
+      keyPressed = function() end
+    }
+    menu[1].text = "Multishell: "..(menu[1].value and "enabled" or "disabled")
+    menu[2] = {
+      key = "list.show_hidden",
+      value = settings.get("list.show_hidden") or false,
+      selectable = true,
+      selected = function() menu[2].value = not menu[2].value menu[2].text = "Show hidden files: "..(menu[2].value and "enabled" or "disabled") return false end,
+      keyPressed = function() end
+    }
+    menu[2].text = "Show hidden files: "..(menu[2].value and "enabled" or "disabled")
+    menu[3] = {
+      key = "shell.autocomplete",
+      value = settings.get("shell.autocomplete") or false,
+      selectable = true,
+      selected = function() menu[3].value = not menu[3].value menu[3].text = "Shell autocomplete: "..(menu[3].value and "enabled" or "disabled") return false end,
+      keyPressed = function() end
+    }
+    menu[3].text = "Shell autocomplete: "..(menu[3].value and "enabled" or "disabled")
+    menu[4] = {
+      key = "lua.autocomplete",
+      value = settings.get("lua.autocomplete") or false,
+      selectable = true,
+      selected = function() menu[4].value = not menu[4].value menu[4].text = "Lua autocomplete: "..(menu[4].value and "enabled" or "disabled") return false end,
+      keyPressed = function() end
+    }
+    menu[4].text = "Lua autocomplete: "..(menu[4].value and "enabled" or "disabled")
+    menu[5] = {
+      key = "edit.autocomplete",
+      value = settings.get("edit.autocomplete") or false,
+      selectable = true,
+      selected = function() menu[5].value = not menu[5].value menu[5].text = "Edit autocomplete: "..(menu[5].value and "enabled" or "disabled") return false end,
+      keyPressed = function() end
+    }
+    menu[5].text = "Edit autocomplete: "..(menu[5].value and "enabled" or "disabled")
+    menu[6] = {
+      text = "",
+      selectable = false
+    }
+    menu[7] = {
+      text = "Save & Exit",
+      selectable = true,
+      selected = function() return true end,
+      keyPressed = function() end
+    }
+    
+    doMenu(menu)    -- Need to add default option so that it can be set to use default
+    
+    settings.save("/os/"..id.."/default_settings")
+  else
+    term.setCursorPos(2, 5)
+    write("Incorrect password! Permission denied. "..password)
+  end
+end
+
+local function selectOS()
+  term.clear()
+  menu = {}
+  
+  local index = 0
+  local selected = -1
+  while fs.isDir("/os/"..tostring(index)) do
+    local copy = index
+    menu[index + 1] = {
+      text = parseConfig(index).name,
+      selectable = true,
+      selected = function() selected = copy return true end,
+      keyPressed = function() end
+    }
+    index = index + 1
+  end
+  menu[tonumber(biosConfig.boot) + 1].text = "> "..menu[tonumber(biosConfig.boot) + 1].text
+  doMenu(menu)
+  
+  biosConfig.boot = selected
+  writeFullConfig(config, biosConfig)
+  
+  return false
+end
+
+local function configureBIOS()
+  term.clear()
+  term.setCursorPos(5, 2)
+  write("Password")
+  term.setCursorPos(2, 3)
+  pw = read("*")
+  
+  if pw == password then
+    settings.load("/bios/config")
+    
+    menu = {
+      {
+        text = "Select OS",
+        selectable = true,
+        selected = selectOS,
+        keyPressed = function() end
+      }, {
+        text = "Change password",
+        selectable = true,
+        selected = function() return false end,
+        keyPressed = function() end
+      }, {
+        text = "Secure mode",
+        selectable = true,
+        selected = function() return false end,
+        keyPressed = function() end
+      }, {
+        text = "",
+        selectable = false,
+      }, {
+        text = "Save & Exit",
+        selectable = true,
+        selected = function() return true end,
+        keyPressed = function() end
+      }
+    }
+    
+    doMenu(menu)
+    
+    -- Here is where the settings are saved
+  else
+    term.setCursorPos(2, 5)
+    write("Incorrect password! Permission denied. "..password)
+  end
+  
+  return false
+end
+
+local options = {}
+local index = 0
+while fs.isDir("/os/"..tostring(index)) do
+  local copy = index
+  options[index + 1] = {
+    text = parseConfig(index).name,
+    selectable = true,
+    selected = function() configureOS(copy) return false end,
+    keyPressed = function() end
+  }
+  index = index + 1
+end
+
+options[index + 1] = {
+  text = "",
+  selectable = false,
+}
+
+options[index + 2] = {
+  text = "Install OS",
+  selectable = true,
+  selected = function() getEnv().doMenu = doMenu os.run(getEnv(), "/bios/installos") return true end,
+  keyPressed = function() end
+}
+
+options[index + 3] = {
+  text = "Default Settings",
+  selectable = true,
+  selected = function() configureOS("default") return false end,
+  keyPressed = function() end
+}
+
+options[index + 4] = {
+  text = "BIOS Settings",
+  selectable = true,
+  selected = configureBIOS,
+  keyPressed = function() end
+}
+
+options[index + 5] = {
+  text = "Exit Setup",
+  selectable = true,
+  selected = function() return true end,
+  keyPressed = function() end
+}
+
+term.clear()
+doMenu(options)

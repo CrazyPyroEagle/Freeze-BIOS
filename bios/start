@@ -1,0 +1,37 @@
+-- Inspired by NeverCast's method
+-- Fixed to work on 1.76 by CrazyPyroEagle
+-- Please give credit if you use this.
+
+-- Running this with the BIOS will shutdown
+-- If you want BIOS support, don't use this
+
+-- Instead I will provide an API for install
+-- scripts allowing you to tell the BIOS to
+-- run certain things for you at top level
+
+local function recover()
+  term.setCursorPos(1, 1)
+  term.clear()
+  
+  _G["shell"] = nil   -- Unload shell
+  _G["rednet"] = nil
+  os.loadAPI("/rom/apis/rednet")    -- Might remove this
+  
+  -- Restore modified environments
+  setfenv(os.run, {_G = _G, loadfile = loadfile, setmetatable = setmetatable, pcall = pcall, table = table, printError = printError})
+  setfenv(os.pullEvent, {_G = _G, os = os, table = table})
+  
+  -- Intentionally not restarting Rednet
+  local success, err = pcall(function() os.run({}, "/bios/bootmenu") end)
+  
+  if not success then
+    printError(err)
+    print("Press any key to continue")
+    os.pullEventRaw("key")
+  end
+  os.shutdown()
+end
+
+-- Set environments to get bios.lua to run recover
+setfenv(os.run, {loadfile = function(path) return recover end, setmetatable = setmetatable, pcall = pcall, table = table, printError = printError})
+setfenv(os.pullEvent, {os = {pullEventRaw = function(event) error("Nope :D", 3) end}, table = table})
