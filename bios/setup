@@ -285,7 +285,7 @@ options[index + 1] = {
 options[index + 2] = {
   text = "Install OS",
   selectable = true,
-  selected = function() getEnv().doMenu = doMenu os.run(getEnv(), "/bios/installos") return true end,
+  selected = function() getEnv().doMenu = doMenu os.run(getEnv(), "/bios/installos") return false end,
   keyPressed = function() end
 }
 

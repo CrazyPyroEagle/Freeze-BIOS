@@ -13,7 +13,7 @@ local function diskInstall()
   local menu = {}
   
   local path = "default"
-  local driveName = ""
+  local driveName = nil
   index = 1
   for _, name in pairs(peripheral.getNames()) do
     if peripheral.getType(name) == "drive" and disk.hasData(name) and fs.exists(fs.combine(disk.getMountPath(name), "startup")) then    -- Gentlemen, we have ourselves a floppy disk filesystem!
@@ -27,26 +27,45 @@ local function diskInstall()
     end
   end
   
+  menu[index] = {
+    text = "",
+    selectable = false
+  }
+  
+  menu[index + 1] = {
+    text = "Cancel",
+    selectable = true,
+    selected = function() return true end,
+    keyPressed = function() end
+  }
+  
+  if index == 1 then
+    menu[1] = menu[2]
+    menu[2] = nil
+  end
+  
   doMenu(menu)
   
-  fs.makeDir("/os/"..osid.."/fs")
-  fs.copy("/rom", "/os/"..osid.."/fs/rom")
-  os.run(getEnv(), "/bios/sandbox", tostring(osid))
-  mount.mount(driveName)
-  
-  term.clear()
-  term.setCursorPos(5, 2)
-  print("OS Name?")
-  term.setCursorPos(2, 3)
-  local osName = read()
-  local handle = fs.open("/os/"..osid.."/config", "w")
-  handle.writeLine("name = \""..osName.."\"")
-  handle.close()
-  
-  term.clear()
-  term.setCursorPos(1, 1)
-  os.run(sandbox, fs.combine(path, "startup"))
-  mount.unmount(driveName)
+  if driveName ~= nil then
+    fs.makeDir("/os/"..osid.."/fs")
+    fs.copy("/rom", "/os/"..osid.."/fs/rom")
+    os.run(getEnv(), "/bios/sandbox", tostring(osid))
+    mount.mount(driveName)
+    
+    term.clear()
+    term.setCursorPos(5, 2)
+    print("OS Name?")
+    term.setCursorPos(2, 3)
+    local osName = read()
+    local handle = fs.open("/os/"..osid.."/config", "w")
+    handle.writeLine("name = \""..osName.."\"")
+    handle.close()
+    
+    term.clear()
+    term.setCursorPos(1, 1)
+    os.run(sandbox, fs.combine(path, "startup"))
+    mount.unmount(driveName)
+  end
   return true
 end
 
