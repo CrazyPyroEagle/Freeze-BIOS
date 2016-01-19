@@ -72,11 +72,17 @@ mount.endAutomount = function()
 end
 
 local mounted = {}
+local rawmounted = {}
 local mountedHandles = {}
 mount.mount = function(side)
   if mounted[side] == nil then
     mounted[side] = fs.combine("/", peripheral.call(side, "getMountPath"))
-    -- Mount here
+  end
+end
+
+mount.mountraw = function(path)
+  if rawmounted[path] == nil then
+    rawmounted[path] = path
   end
 end
 
@@ -93,10 +99,29 @@ mount.unmount = function(side)
   end
 end
 
+mount.unmountraw = function(path)
+  if rawmounted[path] ~= nil then
+    if mountedHandles["raw:"..path] ~= nil then
+      for _, handle in pairs(mountedHandles["raw:"..path]) do
+        if type(handle) == "table" and type(handle.close) == "function" then    -- Security checks to avoid setfenv and _ENV abuse in sandbox environment
+          handle.close()
+        end
+      end
+      mountedHandles["raw:"..path] = nil
+    end
+    rawmounted[path] = nil
+  end
+end
+
 mount.isMounted = function(path)
   for name, mnt in pairs(mounted) do
     if path:match("^/?"..mnt) ~= nil then    -- Does not handle unsafe path names... yet!
       return name
+    end
+  end
+  for rawpath, mnt in pairs(rawmounted) do
+    if path:match("^/?"..mnt) ~= nil then
+      return "raw:"..rawpath
     end
   end
   return nil
@@ -107,6 +132,10 @@ mount.getMountedPaths = function()
   local index = 1
   for name, path in pairs(mounted) do
     paths[index] = path:match("^/?([^/]+)")
+    index = index + 1
+  end
+  for rawpath, mnt in pairs(rawmounted) do
+    paths[index] = mnt:match("^/?([^/]+)")
     index = index + 1
   end
   return paths
@@ -330,12 +359,17 @@ sandbox.multishell = nil
 
 sandbox.os.run = function(env, path, ...)
   for k, v in pairs(sandbox) do
-    if env[k] == nil then
+    if k ~= "_G" and env[k] == nil then
       env[k] = v
     end
   end
   env._G = sandbox
-  return os.run(env, relativePath(path), ...)
+  local newpath, safe, isRoot, mounted = relativePath(path)
+  if safe then
+    return os.run(env, mounted ~= nil and path or newpath, ...)
+  else
+    error("File not found", 0)
+  end
 end
 
 sandbox.os.reboot = function()
@@ -358,12 +392,12 @@ sandbox.os.loadAPI = function(path)
       local ok, err = pcall(apiFn)
       if not ok then
           printError(err)
-          apisLoading[sName] = nil
+          apisLoading[name] = nil
           return false
       end
   else
       printError(err)
-      apisLoading[sName] = nil
+      apisLoading[name] = nil
       return false
   end
   
@@ -380,4 +414,6 @@ sandbox.os.loadAPI = function(path)
 end
 
 sandbox.io = nil
+mount.mountraw("rom")
 sandbox.os.loadAPI("/rom/apis/io")
+mount.unmountraw("rom")

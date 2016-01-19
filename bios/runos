@@ -5,4 +5,15 @@ term.setTextColor(colors.white)
 term.clear()
 term.setCursorPos(1, 1)
 
-local ok, err = pcall(parallel.waitForAll, function() sandbox.os.run(sandbox, "/rom/programs/shell") mount.endAutomount() end, mount.automount)
+mount.mountraw("rom")
+local ok, err = pcall(parallel.waitForAll, function() os.run(sandbox, "/rom/programs/shell") mount.endAutomount() end, mount.automount)
+mount.unmountraw("rom")
+if not ok then
+  term.clear()
+  term.setCursorPos(1, 1)
+  term.setTextColor(colors.red)
+  print("Error: "..err)
+  term.setTextColor(colors.cyan)
+  print("Press any key to continue")
+  os.pullEventRaw("key")
+end

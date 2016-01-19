@@ -258,7 +258,62 @@ local function configureBIOS()
     -- Here is where the settings are saved
   else
     term.setCursorPos(2, 5)
-    write("Incorrect password! Permission denied. "..password)
+    write("Incorrect password! Permission denied.")
+  end
+  
+  return false
+end
+
+local function uninstallBIOS()
+  term.clear()
+  term.setCursorPos(5, 2)
+  write("Password")
+  term.setCursorPos(2, 3)
+  pw = read("*")
+  
+  if pw == password then
+    local notification = "Uninstall Freeze BIOS?"
+    term.clear()
+    term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
+    term.write(notification)
+    term.setCursorPos(1, terminal.height / 2 + 2)
+    local response = read()
+    if response:lower() == "yes" then
+      term.clear()
+      term.setCursorPos(1, 1)
+      
+      write("Moving OS files to \"olddata\"...")
+      fs.makeDir("/olddata")
+      for _, osid in pairs(fs.list("/os")) do
+        if osid ~= "default" then
+          ok, err = pcall(function() fs.move(fs.combine(fs.combine("os", osid), "fs"), fs.combine("/olddata", osid)) end)
+          if not ok then
+            print("\nError: "..err)
+            fs.delete("/olddata")
+            os.pullEventRaw("key")
+          end
+        end
+      end
+      print(" done")
+      
+      write("Deleting BIOS files...")
+      for _, file in pairs(fs.list("/")) do
+        if file ~= "olddata" and not fs.isReadOnly(file) then
+          pcall(fs.delete, file)
+        end
+      end
+      print(" done")
+      
+      term.clear()
+      local notification = "Successfully Uninstalled!"
+      term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
+      term.write(notification)
+      local notification = "[*] Reboot"
+      term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+      term.write(notification)
+      os.pullEventRaw("key")
+      os.reboot()
+    end
   end
   
   return false
@@ -307,6 +362,18 @@ options[index + 5] = {
   text = "Exit Setup",
   selectable = true,
   selected = function() return true end,
+  keyPressed = function() end
+}
+
+options[index + 6] = {
+  text = "",
+  selectable = false
+}
+
+options[index + 7] = {
+  text = "Uninstall BIOS",
+  selectable = true,
+  selected = uninstallBIOS,
   keyPressed = function() end
 }
 

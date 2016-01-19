@@ -24,9 +24,6 @@ handle = fs.open("/os/0/config", "w")
 handle.writeLine("name = \""..os.version().."\"")
 handle.close()
 
-print("Copying files")
-fs.copy("/rom", "/os/0/fs/rom")
-
 term.redirect(previous)
 
 local args = {...}
