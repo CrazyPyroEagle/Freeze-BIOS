@@ -1,6 +1,6 @@
 local bios = {
   name = "Freeze BIOS",
-  version = "Alpha"
+  version = "Beta"
 }
 
 local terminal = {}
