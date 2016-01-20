@@ -1,0 +1,92 @@
+local function getContents(ref, path)
+  local response = http.get("https://api.github.com/repos/CrazyPyroEagle/Freeze-BIOS/contents"..(path == nil and "" or ("/"..path)).."/?ref="..ref)
+  if response ~= nil then
+    response = response.readAll()
+    local ftype = {}
+    local fpath = {}
+    local fname = {}
+    if response ~= nil then
+      for value in response:gmatch("\"type\":\"(%w+)\"") do ftype[#ftype + 1] = value end
+      for value in response:gmatch("\"path\":\"([^\"]+)\"") do fpath[#fpath + 1] = value end
+      for value in response:gmatch("\"name\":\"([^\"]+)\"") do fname[#fname + 1] = value end
+    end
+    return ftype, fpath, fname
+  else
+    error("Failed to resolve URL", 2)
+  end
+end
+
+local function downloadFiles(ref, path)
+  local ftype, fpath, fname = getContents(ref, path)
+  
+  for key, value in pairs(ftype) do
+    if value == "file" then
+      local testPath = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/"..ref.."/"..fpath[key])
+      if testPath == nil then
+        fpath[key] = fpath[key].."/"..fname[key]
+      end
+      if fpath[key] ~= "LICENSE" and fpath[key] ~= "README.md" and not fs.exists(fpath[key]) then
+        local file = downloadFile(ref, fpath[key])
+        if file ~= nil then
+          local handle = fs.open(fs.combine("/update_files", fpath[key]), "w")
+          handle.write(file)
+          handle.close()
+        end
+      end
+    elseif value == "dir" then
+      if not fs.isDir(fpath[key]) then
+        fs.makeDir(fpath[key])
+      end
+      downloadFiles(fpath[key])
+    end
+  end
+end
+
+local function downloadFile(ref, path)
+  local file = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/"..ref.."/"..path)
+  if file ~= nil then
+    return file.readAll()
+  else
+    return nil
+  end
+end
+
+local function parseFullConfig(text)
+  result = {}
+  if text then
+    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+fs.makeDir("/update_files")
+
+    -- Would help with dev releases
+--[[local response = http.get("https://api.github.com/repos/CrazyPyroEagle/Freeze-BIOS/git/refs/heads/master")
+if response == nil then
+  fs.delete("/update_files")
+  error("Failed to connect to GitHub")
+end
+
+local responseData = response.readAll()
+local hash = responseData:match("\"sha\":\"(%w+)\"")
+local isRelease = parseFullConfig(downloadFile(responseData:match("\"sha\":\"(%w+)\""), "bios/build"))
+while not isRelease do
+  
+end]]
+
+downloadFiles("master", nil)
+
+for _, file in pairs(fs.list("/bios")) do
+  if fs.combine("/", file) ~= "config" then
+    fs.delete(fs.combine("/bios", file))
+  end
+end
+
+fs.delete("/startup")
+fs.delete("/.settings")
+
+fs.copy("/update_files", "/")
+fs.delete("/update_files")

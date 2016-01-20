@@ -28,6 +28,15 @@ term.setCursorPos(terminal.width / 2 - #title / 2, terminal.height / 2)
 write(title)
 
 if fs.exists(config) and not fs.isDir(config) then
+  if http ~= nil then   -- Let's see if there's an update.
+    local notification = "Checking for updates..."
+    term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+    write(notification)
+    os.run(getEnv(), "/bios/updater")
+    term.setCursorPos(1, terminal.height)
+    term.clearLine()
+  end
+  
   local notification = "[*] Setup"
   term.setCursorPos(terminal.width - #notification + 1, terminal.height)
   write(notification)

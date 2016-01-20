@@ -13,10 +13,11 @@ A new bootloader for Computercraft
  * Startup disks won't work, and installing from them will only affect their sandboxed environment (secure system)
  * Password-protected: no more pesky rivals messing with your settings
  * Disks work accross all OSes
+ * Contains a built-in auto-updater
 
 ### Planned Features
 
  * Fix fs.find and fs.complete not working for mounted paths
  * Installer API so that installers can set certain special settings (maybe even automatically set the OS name, etc)
  * Install from GitHub support
- * Auto-update support
+ * Better OS setup menu
