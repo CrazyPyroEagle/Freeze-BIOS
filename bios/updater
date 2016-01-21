@@ -27,20 +27,33 @@ local function updateBIOS()
   local code = handle.readAll()
   handle.close()
   
-  local ok, err = pcall(load(code, "updating", "t", getEnv()))
-  if not ok then
-    term.clear()
-    local notification = "Error: "..err
-    term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
-    term.write(notification)
-    local notification = "[*] Reboot"
-    term.clear()
-    term.setCursorPos(terminal.width - #notification + 1, terminal.height)
-    term.write(notification)
-    os.pullEventRaw("key")
+  local func, err = load(code, "updating", "t", getEnv())
+  if func then
+    local ok, err = pcall(func)
+    if not ok then
+      term.clear()
+      local notification = "Error: "..err
+      term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
+      term.write(notification)
+      local notification = "[*] Reboot"
+      term.clear()
+      term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+      term.write(notification)
+      os.pullEventRaw("key")
+    else
+      term.clear()
+      local notification = "Finished updating!"
+      term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
+      term.write(notification)
+      local notification = "[*] Reboot"
+      term.clear()
+      term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+      term.write(notification)
+      os.pullEventRaw("key")
+    end
   else
     term.clear()
-    local notification = "Finished updating!"
+    local notification = "Error: "..err
     term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
     term.write(notification)
     local notification = "[*] Reboot"
@@ -86,36 +99,40 @@ local function updateUpdater(path)
   end
 end
 
-local response = http.get("https://api.github.com/CrazyPyroEagle/Freeze-BIOS/contents/bios/?ref=master")
+local response = http.get("https://api.github.com/repos/CrazyPyroEagle/Freeze-BIOS/contents/bios/?ref=master")
 
-if response ~= nil and response.readAll():match("\"path\":\"bios/build\"") then
-  local response = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/master/bios/build")
+if response ~= nil then
+  local rawresponse = response.readAll()
+  response.close()
+  
+  if rawresponse:find("\"path\"%s*:%s*\"bios/build\"") ~= nil then
+    local response = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/master/bios/build")
 
-  if response ~= nil then
-    local remoteBuild = parseFullConfig(response.readAll())
-    response.close()
-    local buildFile = fs.open("/bios/build", "r")
-    local localBuild = parseFullConfig(buildFile.readAll())
-    buildFile.close()
-    
-    if remoteBuild.discontinued ~= nil then
-      term.clear()
-      local notification = "Update requires reinstallation"
-      term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
-      term.write(notification)
-      local notification = "[*] Reboot"
-      term.clear()
-      term.setCursorPos(terminal.width - #notification + 1, terminal.height)
-      term.write(notification)
-      os.pullEventRaw("key")
-    elseif remoteBuild.updaterBuild ~= localBuild.updaterBuild then
-      updateUpdater(remoteBuild.updaterPath)
-    elseif remoteBuild.buildid ~= localBuild.buildid then
-      updateBIOS()
+    if response ~= nil then
+      local remoteBuild = parseFullConfig(rawresponse)
+      local buildFile = fs.open("/bios/build", "r")
+      local localBuild = parseFullConfig(buildFile.readAll())
+      buildFile.close()
+      
+      -- Discontinuation was a stupid idea.
+      --[[if remoteBuild.discontinued == nil or remoteBuild.discontinued == "true" then
+        term.clear()
+        local notification = "Update requires reinstallation"
+        term.setCursorPos(terminal.width / 2 - #notification / 2 + 1, terminal.height / 2 + 1)
+        term.write(notification)
+        local notification = "[*] Reboot"
+        term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+        term.write(notification)
+        os.pullEventRaw("key")
+      else]]if remoteBuild.updaterBuild ~= localBuild.updaterBuild then
+        updateUpdater(remoteBuild.updaterPath)
+      elseif remoteBuild.buildid ~= localBuild.buildid then
+        updateBIOS()
+      end
+      os.reboot()
     end
+  else    -- The file is absent, the version must be outdated
+    updateBIOS()
     os.reboot()
   end
-else    -- The file changed, the version must be outdated
-  updateBIOS()
-  os.reboot()
 end

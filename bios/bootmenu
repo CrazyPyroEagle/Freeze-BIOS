@@ -32,7 +32,7 @@ if fs.exists(config) and not fs.isDir(config) then
     local notification = "Checking for updates..."
     term.setCursorPos(terminal.width - #notification + 1, terminal.height)
     write(notification)
-    os.run(getEnv(), "/bios/updater")
+    os.run(environment, "/bios/updater")
     term.setCursorPos(1, terminal.height)
     term.clearLine()
   end
