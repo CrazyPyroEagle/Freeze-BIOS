@@ -1,3 +1,4 @@
 buildid = "1"
 updaterBuild = "1"
 updaterPath = "bios/dlupdate"
+discontinued = "false"
