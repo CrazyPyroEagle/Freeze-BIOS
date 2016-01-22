@@ -1,24 +1,8 @@
-local function parseFullConfig(path)
-  if not fs.exists(path) then
-    return nil
-  end
-  result = {}
-  h = fs.open(path, "r")
-  if h then
-    text = h.readAll()
-    h.close()
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
-end
-
 getEnv().sandbox = {}
 getEnv().mount = {}
 
 local args = {...}
-local newroot = "/os/"..(args[1] or parseFullConfig(config).boot).."/fs"
+local newroot = "/os/"..(args[1] or config.parseFile(globalConfig).boot).."/fs"
 
 local function register(key, source, dest, sandbox)
   if type(source[key]) == "table" then

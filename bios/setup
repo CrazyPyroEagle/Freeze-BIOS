@@ -1,115 +1,4 @@
-local function drawMenu(options, selected, index)
-  term.clear()
-  while index ~= terminal.height - 2 and index <= #options do
-    if index == selected then
-      term.setTextColor(colors.red)
-    else
-      term.setTextColor(colors.cyan)
-    end
-    term.setCursorPos(2, index + 1)
-    term.clearLine()
-    write(options[index].text)
-    index = index + 1
-  end
-  term.setTextColor(colors.cyan)
-  
-  message = "[Enter] Confirm"
-  term.setCursorPos(terminal.width - #message + 1, terminal.height)
-  write(message)
-end
-
-local function doMenu(options)
-  local index = 1
-  local selected = 1
-  while true do
-    drawMenu(options, selected, index)
-    local _, key = os.pullEventRaw("key")
-    if key == 200 then    -- Up arrow
-      local newindex = selected - 1
-      while newindex > 0 and not options[newindex].selectable do
-        newindex = newindex - 1
-      end
-      if newindex > 0 then
-        selected = newindex
-      end
-    elseif key == 208 then    -- Down arrow
-      local newindex = selected + 1
-      while newindex <= #options and not options[newindex].selectable do
-        newindex = newindex + 1
-      end
-      if newindex <= #options then
-        selected = newindex
-      end
-    elseif key == 28 then    -- Enter
-      if options[selected].selected() then
-        return
-      end
-    else
-      options[selected].keyPressed(key)
-    end
-    
-    if #options > terminal.height - 2 then
-      if index - selected > terminal.height - 2 then    -- Index is too high
-        index = math.max(1, selected)
-      elseif index - selected < 0 then    -- Index is too low
-        index = math.min(#options - terminal.height + 2, selected)
-      end
-    end
-  end
-end
-
-local function parseConfig(id)
-  if type(id) ~= "string" then
-    id = tostring(id)
-  end
-  if not fs.exists("/os/"..id) then
-    return nil
-  end
-  result = {}
-  h = fs.open("/os/default/config", "r")
-  if h then
-    text = h.readAll()
-    h.close()
-    for k, v in text:gmatch("(%w+) = \"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  h = fs.open("/os/"..id.."/config", "r")
-  if h then
-    text = h.readAll()
-    h.close()
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
-end
-
-local function parseFullConfig(path)
-  if not fs.exists(path) then
-    return nil
-  end
-  result = {}
-  h = fs.open(path, "r")
-  if h then
-    text = h.readAll()
-    h.close()
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
-end
-
-local function writeFullConfig(path, config)
-  h = fs.open(path, "w")
-  for key, value in pairs(config) do
-    h.writeLine(key.." = ".."\""..value.."\"")
-  end
-  h.close()
-end
-
-local biosConfig = parseFullConfig(config)
+local biosConfig = config.parseFile(globalConfig)
 local secureSettings = biosConfig.secureMode == "true"
 local password = biosConfig.password
 
@@ -200,7 +89,7 @@ local function selectOS()
   while fs.isDir("/os/"..tostring(index)) do
     local copy = index
     menu[index + 1] = {
-      text = parseConfig(index).name,
+      text = config.parse(index).name,
       selectable = true,
       selected = function() selected = copy return true end,
       keyPressed = function() end
@@ -211,8 +100,53 @@ local function selectOS()
   doMenu(menu)
   
   biosConfig.boot = selected
-  writeFullConfig(config, biosConfig)
+  config.writeFile(globalConfig, biosConfig)
   
+  return false
+end
+
+local function changePassword()
+  term.clear()
+  local notification = "[Ctrl] Cancel"
+  term.setCursorPos(terminal.width - #notification + 1, terminal.height)
+  term.write(notification)
+  
+  local newpw = nil
+  local function requestNew()
+    term.setCursorPos(5, 2)
+    write("Password")
+    term.setCursorPos(5, 4)
+    write("Reenter")
+    term.setCursorPos(2, 3)
+    local pw = read("*")
+    term.setCursorPos(2, 5)
+    local pw2 = read("*")
+    while #pw < 6 or pw ~= pw2 do
+      term.setCursorPos(2, 7)
+      term.clearLine()
+      if #pw < 6 then
+        write("Password must be at least 6 characters!")
+      else
+        write("Passwords must match!")
+      end
+      term.setCursorPos(2, 5)
+      term.clearLine()
+      term.setCursorPos(2, 3)
+      term.clearLine()
+      pw = read("*")
+      term.setCursorPos(2, 5)
+      pw2 = read("*")
+    end
+    newpw = pw
+  end
+  
+  parallel.waitForAny(requestNew, function() repeat _, key = os.pullEventRaw("key") until key == 29 or key == 157 end)
+  
+  if newpw ~= nil then
+    password = newpw
+    biosConfig.password = newpw
+    config.writeFile(globalConfig, biosConfig)
+  end
   return false
 end
 
@@ -224,8 +158,6 @@ local function configureBIOS()
   pw = read("*")
   
   if pw == password then
-    settings.load("/bios/config")
-    
     menu = {
       {
         text = "Select OS",
@@ -235,7 +167,7 @@ local function configureBIOS()
       }, {
         text = "Change password",
         selectable = true,
-        selected = function() return false end,
+        selected = changePassword,
         keyPressed = function() end
       }, {
         text = "Secure mode",
@@ -255,7 +187,7 @@ local function configureBIOS()
     
     doMenu(menu)
     
-    -- Here is where the settings are saved
+    -- Here is where the settings are saved (not yet necessary)
   else
     term.setCursorPos(2, 5)
     write("Incorrect password! Permission denied.")
@@ -324,7 +256,7 @@ local index = 0
 while fs.isDir("/os/"..tostring(index)) do
   local copy = index
   options[index + 1] = {
-    text = parseConfig(index).name,
+    text = config.parse(index).name,
     selectable = true,
     selected = function() configureOS(copy) return false end,
     keyPressed = function() end
@@ -340,7 +272,7 @@ options[index + 1] = {
 options[index + 2] = {
   text = "Install OS",
   selectable = true,
-  selected = function() getEnv().doMenu = doMenu os.run(getEnv(), "/bios/installos") return false end,
+  selected = function() os.run(getEnv(), "/bios/installos") return false end,
   keyPressed = function() end
 }
 

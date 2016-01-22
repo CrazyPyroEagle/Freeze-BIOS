@@ -21,10 +21,19 @@ local function recover()
   setfenv(os.run, {_G = _G, loadfile = loadfile, setmetatable = setmetatable, pcall = pcall, table = table, printError = printError})
   setfenv(os.pullEvent, {_G = _G, os = os, table = table})
   
-  -- Intentionally not restarting Rednet
-  local success, err = pcall(function() os.run({}, "/bios/bootmenu") end)
+  local handle = fs.open("/bios/bootmenu", "r")
+  local boot = handle.readAll()
+  handle.close()
   
-  if not success then
+  local func, err = load(boot, "boot", "t", _G)
+  if func ~= nil then
+    local success, err = pcall(func)
+    if not success then
+      printError(err)
+      print("Press any key to continue")
+      os.pullEventRaw("key")
+    end
+  else
     printError(err)
     print("Press any key to continue")
     os.pullEventRaw("key")

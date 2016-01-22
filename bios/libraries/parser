@@ -1,0 +1,66 @@
+local function parseConfig(id)
+  if type(id) ~= "string" then
+    id = tostring(id)
+  end
+  if not fs.exists("/os/"..id) then
+    return nil
+  end
+  result = {}
+  h = fs.open("/os/default/config", "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("(%w+) = \"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  h = fs.open("/os/"..id.."/config", "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+local function parseFullConfig(path)
+  if not fs.exists(path) then
+    return nil
+  end
+  result = {}
+  h = fs.open(path, "r")
+  if h then
+    text = h.readAll()
+    h.close()
+    for k, v in text:gmatch("([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+local function writeFullConfig(path, config)
+  h = fs.open(path, "w")
+  for key, value in pairs(config) do
+    h.writeLine(key.." = ".."\""..tostring(value).."\"")
+  end
+  h.close()
+end
+
+local function parseRawConfig(text)
+  local result = {}
+  if type(text) == "string" then
+    for k, v in text:gmatch("([%w_-]+)%s*=%s*\"([^\"]*)\"") do
+      result[k] = v
+    end
+  end
+  return result
+end
+
+getEnv().config = {}
+getEnv().config.parse = parseConfig
+getEnv().config.parseFile = parseFullConfig
+getEnv().config.parseRaw = parseRawConfig
+getEnv().config.writeFile = writeFullConfig

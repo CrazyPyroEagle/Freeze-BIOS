@@ -1,0 +1,61 @@
+local function drawMenu(options, selected, index)
+  term.clear()
+  while index ~= terminal.height - 2 and index <= #options do
+    if index == selected then
+      term.setTextColor(colors.red)
+    else
+      term.setTextColor(colors.cyan)
+    end
+    term.setCursorPos(2, index + 1)
+    term.clearLine()
+    write(options[index].text)
+    index = index + 1
+  end
+  term.setTextColor(colors.cyan)
+  
+  message = "[Enter] Confirm"
+  term.setCursorPos(terminal.width - #message + 1, terminal.height)
+  write(message)
+end
+
+local function doMenu(options)
+  local index = 1
+  local selected = 1
+  while true do
+    drawMenu(options, selected, index)
+    local _, key = os.pullEventRaw("key")
+    if key == 200 then    -- Up arrow
+      local newindex = selected - 1
+      while newindex > 0 and not options[newindex].selectable do
+        newindex = newindex - 1
+      end
+      if newindex > 0 then
+        selected = newindex
+      end
+    elseif key == 208 then    -- Down arrow
+      local newindex = selected + 1
+      while newindex <= #options and not options[newindex].selectable do
+        newindex = newindex + 1
+      end
+      if newindex <= #options then
+        selected = newindex
+      end
+    elseif key == 28 then    -- Enter
+      if options[selected].selected() then
+        return
+      end
+    else
+      options[selected].keyPressed(key)
+    end
+    
+    if #options > terminal.height - 2 then
+      if index - selected > terminal.height - 2 then    -- Index is too high
+        index = math.max(1, selected)
+      elseif index - selected < 0 then    -- Index is too low
+        index = math.min(#options - terminal.height + 2, selected)
+      end
+    end
+  end
+end
+
+getEnv().doMenu = doMenu

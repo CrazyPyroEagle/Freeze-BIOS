@@ -14,7 +14,7 @@ os.pullEvent = os.pullEventRaw
 local environment = {
   bios = bios,
   terminal = terminal,
-  config = config,
+  globalConfig = config,
   pullEvent = pullEvent
 }
 environment.getEnv = function() return environment end
@@ -26,6 +26,12 @@ term.setTextColor(colors.cyan)
 term.clear()
 term.setCursorPos(terminal.width / 2 - #title / 2, terminal.height / 2)
 write(title)
+
+for _, file in pairs(fs.list("/bios/libraries")) do
+  if not fs.isDir(file) then
+    os.run(environment, fs.combine("/bios/libraries", file))
+  end
+end
 
 if fs.exists(config) and not fs.isDir(config) then
   if http ~= nil then   -- Let's see if there's an update.
@@ -115,5 +121,4 @@ else
   end
 end
 
-os.run(environment, "/bios/sandbox")
 os.run(environment, "/bios/runos")

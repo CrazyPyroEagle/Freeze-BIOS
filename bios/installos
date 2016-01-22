@@ -38,7 +38,7 @@ local function pastebinInstall()
     
     os.run(getEnv(), "/bios/sandbox", tostring(osid))
     local func, err = load(shell, "shell", "t", sandbox)
-    if func then
+    if func ~= nil then
       fs.makeDir("/os/"..osid.."/fs")
       term.clear()
       term.setCursorPos(1, 1)
@@ -129,7 +129,7 @@ local function diskInstall()
     
     os.run(getEnv(), "/bios/sandbox", tostring(osid))
     local func, err = load(shell, "shell", "t", sandbox)
-    if func then
+    if func ~= nil then
       fs.makeDir("/os/"..osid.."/fs")
       term.clear()
       term.setCursorPos(1, 1)
@@ -156,22 +156,6 @@ local function diskInstall()
     end
   end
   return true
-end
-
-local function parseFullConfig(path)
-  if not fs.exists(path) then
-    return nil
-  end
-  result = {}
-  h = fs.open(path, "r")
-  if h then
-    text = h.readAll()
-    h.close()
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
 end
 
 local menu = {}
@@ -204,7 +188,7 @@ menu[#menu + 1] = {
   keyPressed = function() end
 }
 
-local password = parseFullConfig(config).password
+local password = config.parseFile(globalConfig).password
 
 term.clear()
 term.setCursorPos(5, 2)

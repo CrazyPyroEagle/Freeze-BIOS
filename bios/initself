@@ -27,7 +27,7 @@ handle.close()
 term.redirect(previous)
 
 local args = {...}
-handle = fs.open(config, "w")
+handle = fs.open(globalConfig, "w")
 handle.writeLine("boot = \"0\"")
 handle.writeLine("secureMode = \"true\"")
 handle.writeLine("password = \""..args[1].."\"")

@@ -1,4 +1,4 @@
-print("Unfinished: /bios/runos")
+os.run(getEnv(), "/bios/sandbox")
 
 term.setBackgroundColor(colors.black)
 term.setTextColor(colors.white)

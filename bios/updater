@@ -1,13 +1,3 @@
-local function parseFullConfig(text)
-  result = {}
-  if text then
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
-end
-
 local function downloadFile(path)
   local file = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/master/"..path)
   if file ~= nil then
@@ -109,9 +99,9 @@ if response ~= nil then
     local response = http.get("https://raw.github.com/CrazyPyroEagle/Freeze-BIOS/master/bios/build")
 
     if response ~= nil then
-      local remoteBuild = parseFullConfig(rawresponse)
+      local remoteBuild = config.parseRaw(response.readAll())
       local buildFile = fs.open("/bios/build", "r")
-      local localBuild = parseFullConfig(buildFile.readAll())
+      local localBuild = config.parseRaw(buildFile.readAll())
       buildFile.close()
       
       -- Discontinuation was a stupid idea.
@@ -128,6 +118,8 @@ if response ~= nil then
         updateUpdater(remoteBuild.updaterPath)
       elseif remoteBuild.buildid ~= localBuild.buildid then
         updateBIOS()
+      else
+        return    -- We don't want to reboot if there's no update.
       end
       os.reboot()
     end

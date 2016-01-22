@@ -51,16 +51,6 @@ local function downloadFile(ref, path)
   end
 end
 
-local function parseFullConfig(text)
-  result = {}
-  if text then
-    for k, v in text:gmatch("%s*([%w_-]+)%s*=%s*\"([^\"]*)\"") do
-      result[k] = v
-    end
-  end
-  return result
-end
-
 fs.makeDir("/update_files")
 
     -- Would help with dev releases
@@ -72,7 +62,7 @@ end
 
 local responseData = response.readAll()
 local hash = responseData:match("\"sha\":\"(%w+)\"")
-local isRelease = parseFullConfig(downloadFile(responseData:match("\"sha\":\"(%w+)\""), "bios/build"))
+local isRelease = config.parseFile(downloadFile(responseData:match("\"sha\":\"(%w+)\""), "bios/build"))
 while not isRelease do
   
 end]]
